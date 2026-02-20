@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cataract Simulator</title>
+    <style>
+        :root {
+            /* Base UI Colors */
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --bg-color: #f8f9fa;
+            --panel-bg: #ffffff;
+            --border-color: #dee2e6;
+            --text-main: #333333;
+            --text-muted: #6c757d;
+
+            /* Unified Brown Cataract Palette */
+            --cat-brown-1: #C79A5A;  /* Light amber */
+            --cat-brown-2: #A8743A;  /* Medium brown */
+            --cat-brown-3: #7A4A24;  /* Deep brown */
+            --cat-brown-4: #4A2B16;  /* Very dark brown */
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; display: flex; flex-direction: column; height: 100vh; }
+        header { background-color: var(--primary); color: white; padding: 15px 20px; text-align: center; font-size: 1.2rem; font-weight: bold; flex-shrink: 0;}
+        
+        .app-container { display: flex; flex: 1; overflow: hidden; flex-direction: column; }
+        @media (min-width: 768px) { .app-container { flex-direction: row; } }
+
+        /* Left Panel - Controls */
+        .controls-panel { width: 100%; max-width: 350px; background: var(--panel-bg); border-right: 1px solid var(--border-color); padding: 20px; overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
+        @media (max-width: 767px) { .controls-panel { max-width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); height: 40vh; } }
+        
+        .control-group { border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; background: #fafafa; }
+        .control-group-title { font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; font-weight: bold; letter-spacing: 0.5px; }
+        
+        /* Tabs */
+        .tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+        .tab-btn { flex: 1; min-width: 45%; padding: 8px; font-size: 0.8rem; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        
+        /* Subtype Grid */
+        .subtype-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .subtype-btn { padding: 8px; font-size: 0.8rem; background: white; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .subtype-btn:hover { background: #e9ecef; }
+        .subtype-btn.active { background: var(--secondary); color: white; border-color: var(--secondary); }
+
+        /* Sliders & Toggles */
+        .slider-container { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        input[type="range"] { flex: 1; cursor: pointer; }
+        .toggle-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        
+        .btn-reset { width: 100%; padding: 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-top: auto; }
+        .btn-reset:hover { background: #c0392b; }
+
+        /* Main Panel - Diagram & Info */
+        .main-panel { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: white; }
+        
+        .diagram-container { min-height: 350px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; border-bottom: 1px solid var(--border-color); position: relative;}
+        svg { width: 100%; height: 100%; max-height: 450px; display: block; }
+        
+        .educational-note { font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 10px; font-style: italic; max-width: 80%; }
+
+        /* SVG Elements Styling */
+        .eye-anatomy { fill: none; stroke: #333; stroke-width: 3; }
+        .cornea { stroke: #3498db; stroke-width: 4; }
+        .iris { fill: #333; }
+        .retina-line { stroke: #e67e22; stroke-width: 4; }
+        .lens-capsule { fill: #fdfefe; stroke: #7f8c8d; stroke-width: 2; }
+        
+        .ray { stroke: #f1c40f; stroke-width: 2; fill: none; transition: d 0.3s ease; }
+        .scatter-ray { stroke: #f39c12; stroke-width: 1; stroke-dasharray: 4,4; fill: none; opacity: 0; }
+        .focal-point { fill: #e74c3c; transition: cx 0.3s ease; }
+        .focal-label-text { font-size: 14px; fill: var(--text-main); font-weight: bold; }
+        
+        /* Unified Brown Cataract Palette Classes */
+        .op-layer { opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; }
+        .catFillLight { fill: var(--cat-brown-1); }
+        .catFillMid { fill: var(--cat-brown-2); }
+        .catFillDark { fill: var(--cat-brown-3); }
+        .catFillVeryDark { fill: var(--cat-brown-4); }
+        .catStrokeLight { stroke: var(--cat-brown-1); }
+        .catStrokeMid { stroke: var(--cat-brown-2); }
+        .catStrokeDark { stroke: var(--cat-brown-3); }
+
+        /* Photo Panel */
+        .photo-container { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; background: #fafafa; }
+        .photo-wrapper { width: 100%; max-width: 500px; border: 1px solid var(--border-color); border-radius: 4px; background: white; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 200px; }
+        #refPhoto { width: 100%; height: auto; max-height: 350px; object-fit: contain; display: block; }
+        #photoPlaceholder { padding: 40px 20px; color: var(--text-muted); font-style: italic; text-align: center; }
+        .photo-caption { margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); text-align: center; font-weight: 500;}
+
+        /* Info Panel */
+        .info-panel { padding: 20px 30px; background: #fff; display: grid; grid-template-columns: 1fr; gap: 20px; flex-grow: 1;}
+        @media (min-width: 1024px) { .info-panel { grid-template-columns: 2fr 1fr; } }
+        
+        .info-section h3 { font-size: 1.2rem; color: var(--primary); margin-bottom: 10px; border-bottom: 2px solid var(--accent); padding-bottom: 5px; display: inline-block;}
+        .info-section ul { margin-left: 20px; list-style-type: square; }
+        .info-section p, .info-section li { font-size: 0.95rem; margin-bottom: 6px; }
+        .pearl-box { background: #fdf2e9; border-left: 4px solid #e67e22; padding: 15px; border-radius: 4px; font-size: 0.9rem; font-style: italic; }
+
+        /* Footer */
+        .footer { text-align: center; padding: 20px; font-size: 0.9rem; color: var(--text-muted); border-top: 1px solid var(--border-color); background: #fafafa; margin-top: auto;}
+        .footer a { color: var(--accent); text-decoration: none; font-weight: bold; margin: 0 5px;}
+        .footer a:hover { text-decoration: underline; }
+
+        /* Utility */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <header>Cataract Simulator</header>
+
+    <div class="app-container">
+        
+        <div class="controls-panel">
+            
+            <div class="control-group">
+                <div class="control-group-title">1. Category</div>
+                <div class="tabs" id="categoryTabs" role="tablist">
+                    <button class="tab-btn active" data-target="age" role="tab" aria-selected="true">Age-related</button>
+                    <button class="tab-btn" data-target="congenital" role="tab" aria-selected="false">Congenital</button>
+                    <button class="tab-btn" data-target="secondary" role="tab" aria-selected="false">Secondary</button>
+                    <button class="tab-btn" data-target="stage" role="tab" aria-selected="false">Stage-based</button>
+                </div>
+
+                <div class="control-group-title">2. Subtype</div>
+                <div id="subtypes-age" class="subtype-grid">
+                    <button class="subtype-btn active" data-cat="nuclear">Nuclear</button>
+                    <button class="subtype-btn" data-cat="cortical">Cortical</button>
+                    <button class="subtype-btn" data-cat="psc">PSC</button>
+                </div>
+                <div id="subtypes-congenital" class="subtype-grid hidden">
+                    <button class="subtype-btn" data-cat="lamellar">Lamellar</button>
+                    <button class="subtype-btn" data-cat="sutural">Sutural</button>
+                    <button class="subtype-btn" data-cat="polar">Ant. Polar</button>
+                    <button class="subtype-btn" data-cat="cerulean">Cerulean</button>
+                </div>
+                <div id="subtypes-secondary" class="subtype-grid hidden">
+                    <button class="subtype-btn" data-cat="traumatic">Traumatic</button>
+                    <button class="subtype-btn" data-cat="diabetic">Diabetic (Snowflake)</button>
+                    <button class="subtype-btn" data-cat="radiation">Radiation</button>
+                    <button class="subtype-btn" data-cat="complicated">Complicated</button>
+                </div>
+                <div id="subtypes-stage" class="subtype-grid hidden">
+                    <button class="subtype-btn" data-cat="immature">Immature</button>
+                    <button class="subtype-btn" data-cat="mature">Mature</button>
+                    <button class="subtype-btn" data-cat="morgagnian">Morgagnian</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-group-title">3. Severity & Optics</div>
+                <div class="slider-container">
+                    <label for="severitySlider" style="font-size:0.9rem;">Severity</label>
+                    <input type="range" id="severitySlider" min="0" max="4" value="0" step="1" aria-label="Severity slider">
+                    <span id="severityVal" style="font-weight:bold; width:20px; text-align:right;">0</span>
+                </div>
+                
+                <div class="toggle-group">
+                    <label for="toggleScatter">Show Scatter / Glare</label>
+                    <input type="checkbox" id="toggleScatter">
+                </div>
+                <div class="toggle-group">
+                    <label for="toggleFocus">Show Focus Shift</label>
+                    <input type="checkbox" id="toggleFocus">
+                </div>
+            </div>
+
+            <button class="btn-reset" id="btnReset">Reset to Clear Lens</button>
+        </div>
+
+        <div class="main-panel">
+            
+            <div class="diagram-container">
+                <svg viewBox="0 0 700 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="nucleusGradBrown" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="var(--cat-brown-1)" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="var(--cat-brown-3)" stop-opacity="1"/>
+                        </radialGradient>
+                        <radialGradient id="matureGradBrown" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="var(--cat-brown-2)" stop-opacity="1"/>
+                            <stop offset="100%" stop-color="var(--cat-brown-4)" stop-opacity="1"/>
+                        </radialGradient>
+                    </defs>
+
+                    <path class="eye-anatomy" d="M 120 100 Q 300 50 600 100 L 600 300 Q 300 350 120 300" />
+                    <path class="cornea" d="M 120 100 Q 70 200 120 300" fill="none" />
+                    <rect class="iris" x="140" y="100" width="8" height="60" rx="4" />
+                    <rect class="iris" x="140" y="240" width="8" height="60" rx="4" />
+                    <line class="retina-line" x1="550" y1="80" x2="550" y2="320" />
+                    <text x="560" y="310" class="focal-label-text" fill="#e67e22">Retina</text>
+
+                    <g id="lens-group" transform="translate(180, 200)">
+                        <ellipse class="lens-capsule" cx="0" cy="0" rx="25" ry="65" />
+                        
+                        <g id="layer-nucleus" class="op-layer">
+                            <ellipse cx="0" cy="0" rx="16" ry="42" fill="url(#nucleusGradBrown)" />
+                        </g>
+
+                        <g id="layer-cortex" class="op-layer">
+                            <path class="catFillLight catStrokeMid" stroke-width="1" d="M 0 -60 L -6 -25 L 6 -25 Z" />
+                            <path class="catFillLight catStrokeMid" stroke-width="1" d="M 0 60 L -6 25 L 6 25 Z" />
+                            <path class="catFillLight catStrokeMid" stroke-width="1" d="M -22 0 L -8 -8 L -8 8 Z" />
+                            <path class="catFillLight catStrokeMid" stroke-width="1" d="M 22 0 L 8 -8 L 8 8 Z" />
+                            <path class="catFillLight catStrokeMid" stroke-width="1" d="M -15 -45 L -5 -18 L 2 -25 Z" />
+                            <path class="catFillLight catStrokeMid" stroke-width="1" d="M 15 45 L 5 18 L -2 25 Z" />
+                        </g>
+
+                        <g id="layer-psc" class="op-layer">
+                            <path class="catFillDark" d="M 18 -22 Q 26 0 18 22 Q 22 0 18 -22" />
+                        </g>
+
+                        <g id="layer-anterior-polar" class="op-layer">
+                            <ellipse class="catFillMid" cx="-23" cy="0" rx="4" ry="8" />
+                        </g>
+
+                        <g id="layer-sutural" class="op-layer">
+                            <path class="catStrokeDark" fill="none" stroke-width="3" stroke-linecap="round" d="M 0 0 L 0 -22 M 0 0 L -15 15 M 0 0 L 15 15" />
+                            <path class="catStrokeMid" fill="none" stroke-width="2" stroke-linecap="round" d="M 0 0 L 0 22 M 0 0 L -15 -15 M 0 0 L 15 -15" stroke-dasharray="3,2"/>
+                        </g>
+
+                        <g id="layer-lamellar" class="op-layer">
+                            <ellipse class="catStrokeMid" fill="none" cx="0" cy="0" rx="18" ry="45" stroke-width="6" stroke-dasharray="8,4" />
+                        </g>
+
+                        <g id="layer-cerulean" class="op-layer">
+                            <circle class="catFillMid" cx="-10" cy="-30" r="2.5" /><circle class="catFillLight" cx="10" cy="-20" r="2" /><circle class="catFillDark" cx="5" cy="-40" r="1.5" />
+                            <circle class="catFillLight" cx="-5" cy="35" r="2" /><circle class="catFillMid" cx="12" cy="25" r="2.5" /><circle class="catFillDark" cx="-12" cy="15" r="2" />
+                            <circle class="catFillMid" cx="0" cy="10" r="1.5" /><circle class="catFillLight" cx="0" cy="-10" r="2" />
+                        </g>
+
+                        <g id="layer-traumatic" class="op-layer">
+                            <path class="catFillMid catStrokeDark" stroke-width="1" d="M 0 -35 L 6 -8 L 30 0 L 6 8 L 0 35 L -6 8 L -30 0 L -6 -8 Z" />
+                        </g>
+
+                        <g id="layer-snowflake" class="op-layer">
+                            <circle class="catFillLight" cx="0" cy="-40" r="3"/><circle class="catFillMid" cx="-5" cy="-38" r="2"/><circle class="catFillLight" cx="5" cy="-42" r="1.5"/>
+                            <circle class="catFillMid" cx="10" cy="30" r="3"/><circle class="catFillLight" cx="5" cy="32" r="2"/>
+                            <circle class="catFillLight" cx="-15" cy="10" r="3"/><circle class="catFillMid" cx="-18" cy="15" r="1.5"/>
+                            <circle class="catFillMid" cx="12" cy="-10" r="2.5"/><circle class="catFillLight" cx="16" cy="-5" r="1.5"/>
+                        </g>
+
+                        <g id="layer-mature" class="op-layer">
+                            <ellipse cx="0" cy="0" rx="24" ry="64" fill="url(#matureGradBrown)" />
+                        </g>
+
+                        <g id="layer-morgagnian-fluid" class="op-layer">
+                            <ellipse class="catFillLight" cx="0" cy="0" rx="24" ry="64" />
+                        </g>
+                        <g id="layer-morgagnian-nucleus" class="op-layer">
+                            <ellipse class="catFillVeryDark" cx="0" cy="20" rx="14" ry="28" />
+                        </g>
+                    </g>
+
+                    <g id="ray-group"></g>
+                    <g id="scatter-group"></g>
+                    <circle id="focal-point" class="focal-point" cx="550" cy="200" r="4" />
+                    
+                    <text id="focus-label" x="350" y="380" class="focal-label-text" text-anchor="middle">Focus: Normal (On Retina)</text>
+                    <text id="opacity-label" x="180" y="320" class="focal-label-text" text-anchor="middle" fill="#7f8c8d"></text>
+                </svg>
+                <div class="educational-note">
+                    * All cataract patterns are intentionally rendered in a unified brown palette for consistency; diagnosis is based on anatomic location and pattern rather than distinct color variations.
+                </div>
+            </div>
+
+            <div class="photo-container">
+                <div class="photo-wrapper">
+                    <img id="refPhoto" src="" alt="" class="hidden">
+                    <div id="photoPlaceholder">Reference photo not available for this type.</div>
+                </div>
+                <div id="photo-caption" class="photo-caption">Reference photo: Not available</div>
+            </div>
+
+            <div class="info-panel">
+                <div class="info-section">
+                    <h3 id="info-title">Normal Clear Lens</h3>
+                    <p><strong>Location/Anatomy:</strong> <span id="info-anatomy">The crystalline lens is perfectly transparent.</span></p>
+                    <p><strong>Symptoms:</strong></p>
+                    <ul id="info-symptoms">
+                        <li>Clear, sharp vision.</li>
+                        <li>No glare or light scatter.</li>
+                    </ul>
+                    <p style="margin-top: 10px;"><strong>Slit-lamp view:</strong> <span id="info-slitlamp">Clear media.</span></p>
+                </div>
+                
+                <div class="info-section">
+                    <h3>Clinical Pearl</h3>
+                    <div class="pearl-box" id="info-pearl">
+                        A healthy lens focuses parallel light rays exactly on the retina.
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>Created by Syafiq Hakimi | 
+                <a href="https://www.linkedin.com/in/syafiqhakimiii/" target="_blank">LinkedIn</a> | 
+                <a href="https://www.tiktok.com/@syafiqhakimiii" target="_blank">TikTok</a></p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        /**
+         * CATARACT DEFINITIONS & PHOTO MAPPING
+         * To add/edit photos: Place the numbered .jpg or .jpeg files in the SAME DIRECTORY as this HTML file.
+         * Then, ensure the "photoIndex" number matches the file name (e.g., photoIndex: 1 matches "1.jpg").
+         * If a cataract has no photo, set photoIndex to null.
+         */
+        const CATARACTS = {
+            'clear': {
+                name: "Normal Clear Lens", layers: [], photoIndex: 0,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0, defaultFocus: true, defaultScatter: false },
+                labels: { anatomy: "The crystalline lens is completely transparent.", symptoms: ["Clear, sharp vision.", "No light scatter or glare."], slitlamp: "Clear media, dark pupil on retroillumination.", pearl: "A healthy lens focuses parallel light rays exactly on the retina without scattering." }
+            },
+            'nuclear': {
+                name: "Nuclear Sclerosis", layers: ['layer-nucleus'], photoIndex: 1,
+                optics: { shiftType: 'myopic', shiftStr: 0.8, scatterStr: 0.3, defaultFocus: true, defaultScatter: false },
+                labels: { anatomy: "Central core (nucleus) of the lens hardens and undergoes brunescence.", symptoms: ["Distance vision blur.", "Temporary improvement in near vision ('second sight')."], slitlamp: "Optic section shows yellowing/browning of the central nucleus.", pearl: "Hardening increases the refractive index, causing a myopic shift (pulling focal point forward)." }
+            },
+            'cortical': {
+                name: "Cortical Cataract", layers: ['layer-cortex'], photoIndex: 2,
+                optics: { shiftType: 'variable', shiftStr: 0.2, scatterStr: 0.9, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Outer layer (cortex) develops wedge-like or spoke-like opacities.", symptoms: ["Significant glare, especially driving at night.", "Monocular diplopia."], slitlamp: "Retroillumination shows dark, spoke-like shadows against the red reflex.", pearl: "Cortical spokes act like prisms, highly scattering light entering the periphery." }
+            },
+            'psc': {
+                name: "Posterior Subcapsular (PSC)", layers: ['layer-psc'], photoIndex: 3,
+                optics: { shiftType: 'none', shiftStr: 0.1, scatterStr: 1.0, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Plaque-like opacity forms just in front of the posterior capsule.", symptoms: ["Profound difficulty reading.", "Severe glare in bright sunlight."], slitlamp: "Granular, plaque-like dark spot centrally on retroillumination.", pearl: "Positioned near the nodal point, even a tiny PSC causes massive visual disruption when the pupil constricts." }
+            },
+            'lamellar': {
+                name: "Lamellar (Zonular) Cataract", layers: ['layer-lamellar'], photoIndex: 4,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0.5, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Opacity affects specific layers/zones, leaving center and periphery clear.", symptoms: ["Vision varies; often mild impairment."], slitlamp: "Appearance of a 'target' or rings around the nucleus.", pearl: "Most common congenital cataract, often caused by a temporary metabolic disturbance." }
+            },
+            'sutural': {
+                name: "Sutural Cataract", layers: ['layer-sutural'], photoIndex: 5,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0.2, defaultFocus: false, defaultScatter: false },
+                labels: { anatomy: "Opacities following the Y-sutures of the fetal nucleus.", symptoms: ["Usually asymptomatic.", "Rarely affects visual acuity."], slitlamp: "Y-shaped opacities in the center of the lens.", pearl: "Follows the natural anatomic junction of the lens fibers." }
+            },
+            'polar': {
+                name: "Anterior Polar Cataract", layers: ['layer-anterior-polar'], photoIndex: 6,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0.3, defaultFocus: false, defaultScatter: false },
+                labels: { anatomy: "Small, central opacity on the anterior lens capsule.", symptoms: ["Usually visually insignificant due to small size."], slitlamp: "Distinct dot right at the front surface of the lens.", pearl: "Often associated with persistent pupillary membrane remnants." }
+            },
+            'cerulean': {
+                name: "Cerulean (Blue Dot) Cataract", layers: ['layer-cerulean'], photoIndex: 7,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0.2, defaultFocus: false, defaultScatter: false },
+                labels: { anatomy: "Multiple tiny dot opacities scattered in the cortex.", symptoms: ["Typically asymptomatic."], slitlamp: "Scattered dots throughout the lens layers (clinically blue/white, mapped brown here).", pearl: "Though distinct under the slit lamp, they almost never require surgical extraction." }
+            },
+            'traumatic': {
+                name: "Traumatic (Rosette) Cataract", layers: ['layer-traumatic'], photoIndex: 8,
+                optics: { shiftType: 'variable', shiftStr: 0.2, scatterStr: 0.7, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Stellate or rosette-shaped opacity.", symptoms: ["Vision loss post-trauma.", "Glare and haze."], slitlamp: "Distinct petaloid or star-like pattern.", pearl: "Blunt trauma causes shockwaves, creating the characteristic rosette." }
+            },
+            'diabetic': {
+                name: "Diabetic (Snowflake) Cataract", layers: ['layer-snowflake'], photoIndex: 9,
+                optics: { shiftType: 'myopic', shiftStr: 0.6, scatterStr: 0.8, defaultFocus: true, defaultScatter: true },
+                labels: { anatomy: "Bilateral, diffuse, subcapsular opacities resembling snowflakes.", symptoms: ["Rapid onset vision drop.", "Fluctuating vision."], slitlamp: "Multiple snowflake-like opacities in anterior/posterior cortex.", pearl: "True diabetic cataracts are rare. High sugar converts to sorbitol, drawing water into the lens." }
+            },
+            'radiation': {
+                name: "Radiation Cataract", layers: ['layer-psc'], photoIndex: 10,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0.8, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Typically begins as a posterior subcapsular opacity.", symptoms: ["Progressive glare and near vision difficulty."], slitlamp: "Starts as a PSC, progresses to complete opacity.", pearl: "The lens epithelium is highly sensitive to ionizing radiation." }
+            },
+            'complicated': {
+                name: "Complicated Cataract", layers: ['layer-psc', 'layer-cortex'], photoIndex: null,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 0.9, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Posterior pole haze progressing to total opacity.", symptoms: ["Vision loss associated with chronic eye inflammation."], slitlamp: "Often accompanied by posterior synechiae.", pearl: "Secondary to intraocular disease like chronic uveitis." }
+            },
+            'immature': {
+                name: "Immature Cataract", layers: ['layer-nucleus', 'layer-cortex'], photoIndex: null,
+                optics: { shiftType: 'myopic', shiftStr: 0.5, scatterStr: 0.6, defaultFocus: true, defaultScatter: true },
+                labels: { anatomy: "Lens is partially opaque. Clear areas still remain.", symptoms: ["Gradual blur."], slitlamp: "Mixed nuclear/cortical changes, red reflex degraded.", pearl: "This is the stage where most patients elect for surgery." }
+            },
+            'mature': {
+                name: "Mature Cataract", layers: ['layer-mature'], photoIndex: 11,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 1.0, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "The entire lens is completely opaque.", symptoms: ["Severe vision loss.", "No pain."], slitlamp: "Completely opaque lens. No red reflex.", pearl: "The lens absorbs water and swells. Can induce secondary angle-closure glaucoma." }
+            },
+            'morgagnian': {
+                name: "Hypermature (Morgagnian)", layers: ['layer-morgagnian-fluid', 'layer-morgagnian-nucleus'], photoIndex: 12,
+                optics: { shiftType: 'none', shiftStr: 0, scatterStr: 1.0, defaultFocus: false, defaultScatter: true },
+                labels: { anatomy: "Cortical fibers liquefy; the heavy nucleus sinks.", symptoms: ["Profound vision loss."], slitlamp: "Diffuse haze with a darker nucleus visible inferiorly.", pearl: "Lens proteins can leak, causing phacolytic glaucoma." }
+            }
+        };
+
+        const uiTabs = document.querySelectorAll('.tab-btn');
+        const uiSubtypes = document.querySelectorAll('.subtype-btn');
+        const uiSlider = document.getElementById('severitySlider');
+        const uiSevVal = document.getElementById('severityVal');
+        const uiScatter = document.getElementById('toggleScatter');
+        const uiFocus = document.getElementById('toggleFocus');
+        const btnReset = document.getElementById('btnReset');
+        
+        const rayGroup = document.getElementById('ray-group');
+        const scatterGroup = document.getElementById('scatter-group');
+        const focalPoint = document.getElementById('focal-point');
+        const focusLabel = document.getElementById('focus-label');
+        const opacityLabel = document.getElementById('opacity-label');
+
+        let currentType = 'clear';
+        let severity = 0;
+
+        function init() {
+            setupListeners();
+            setStage('clear', 0);
+        }
+
+        function setupListeners() {
+            uiTabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    uiTabs.forEach(t => t.classList.remove('active'));
+                    e.target.classList.add('active');
+                    document.querySelectorAll('.subtype-grid').forEach(grid => grid.classList.add('hidden'));
+                    document.getElementById(`subtypes-${e.target.dataset.target}`).classList.remove('hidden');
+                });
+            });
+
+            uiSubtypes.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    uiSubtypes.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    let cat = e.target.dataset.cat;
+                    let startSev = (cat === 'mature' || cat === 'morgagnian') ? 4 : 2;
+                    setStage(cat, startSev);
+                });
+            });
+
+            uiSlider.addEventListener('input', (e) => {
+                severity = parseInt(e.target.value);
+                if (severity === 0) {
+                    uiSubtypes.forEach(b => b.classList.remove('active'));
+                    currentType = 'clear';
+                } else if (currentType === 'clear' && severity > 0) {
+                    document.querySelector('[data-cat="nuclear"]').click();
+                    return;
+                }
+                updateSimulation();
+            });
+
+            uiScatter.addEventListener('change', updateSimulation);
+            uiFocus.addEventListener('change', updateSimulation);
+
+            btnReset.addEventListener('click', () => {
+                uiSubtypes.forEach(b => b.classList.remove('active'));
+                setStage('clear', 0);
+            });
+        }
+
+        function setStage(catId, sev) {
+            currentType = catId;
+            severity = sev;
+            uiSlider.value = severity;
+            
+            const catData = CATARACTS[currentType];
+            if (currentType !== 'clear') {
+                uiFocus.checked = catData.optics.defaultFocus;
+                uiScatter.checked = catData.optics.defaultScatter;
+            } else {
+                uiFocus.checked = true;
+                uiScatter.checked = false;
+            }
+            updateSimulation();
+            updateReferencePhoto(catId);
+        }
+
+        function updateReferencePhoto(catId) {
+            const cat = CATARACTS[catId];
+            const imgEl = document.getElementById('refPhoto');
+            const placeholder = document.getElementById('photoPlaceholder');
+            const caption = document.getElementById('photo-caption');
+
+            // Reset event listeners for cleanly handling image load failures
+            imgEl.onload = null;
+            imgEl.onerror = null;
+
+            if (!cat || cat.photoIndex === null) {
+                imgEl.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                caption.innerText = "Reference photo: Not available";
+                return;
+            }
+
+            const n = cat.photoIndex;
+            const name = cat.name;
+
+            imgEl.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+            imgEl.alt = `${name} cataract reference photo`;
+            
+            // Set caption without the file name format requested
+            caption.innerText = `Reference photo: ${name}`;
+            
+            // Try loading .jpg first
+            imgEl.onerror = function() {
+                // If .jpg fails, fallback to .jpeg
+                imgEl.onerror = function() {
+                    // If .jpeg also fails, show the placeholder
+                    imgEl.classList.add('hidden');
+                    placeholder.classList.remove('hidden');
+                    caption.innerText = `Reference photo: Not available`;
+                };
+                imgEl.src = `${n}.jpeg`;
+            };
+
+            // Trigger the first load attempt
+            imgEl.src = `${n}.jpg`;
+        }
+
+        function updateSimulation() {
+            uiSevVal.innerText = severity;
+            const cat = CATARACTS[currentType];
+
+            // 1. Info Texts
+            document.getElementById('info-title').innerText = cat.name;
+            document.getElementById('info-anatomy').innerText = cat.labels.anatomy;
+            document.getElementById('info-symptoms').innerHTML = cat.labels.symptoms.map(s => `<li>${s}</li>`).join('');
+            document.getElementById('info-slitlamp').innerText = cat.labels.slitlamp;
+            document.getElementById('info-pearl').innerText = cat.labels.pearl;
+            opacityLabel.innerText = severity > 0 ? cat.name : "";
+
+            // Handle Photo switch if slider dragged
+            if (severity === 0) {
+                updateReferencePhoto('clear');
+            } else if (document.getElementById('refPhoto').classList.contains('hidden') && cat.photoIndex !== null) {
+                updateReferencePhoto(currentType);
+            }
+
+            // 2. SVG Opacity Mapping (Brown Palette Specs: 0 to 4)
+            document.querySelectorAll('.op-layer').forEach(layer => { 
+                layer.style.opacity = 0; 
+                layer.style.transform = 'translate(0, 0)';
+            });
+
+            if (severity > 0) {
+                // Map severity to non-linear opacity specifically requested in prompt
+                let opMap = { 1: 0.16, 2: 0.30, 3: 0.48, 4: 0.75 };
+                let baseOp = opMap[severity];
+                
+                cat.layers.forEach(layerId => {
+                    let el = document.getElementById(layerId);
+                    if (el) {
+                        el.style.opacity = baseOp;
+                        // Sinking nucleus logic for Morgagnian
+                        if (layerId === 'layer-morgagnian-nucleus') {
+                            let drop = (severity / 4) * 22;
+                            el.style.transform = `translate(0px, ${drop}px)`;
+                        }
+                    }
+                });
+            }
+
+            // 3. Optics Simulation
+            renderOptics(cat);
+        }
+
+        function renderOptics(cat) {
+            rayGroup.innerHTML = '';
+            scatterGroup.innerHTML = '';
+            
+            const retinaX = 550;
+            const lensX = 180;
+            const lensY = 200;
+            let focalX = retinaX;
+
+            let isDegraded = (severity > 0 && (currentType === 'mature' || currentType === 'morgagnian'));
+
+            if (severity > 0 && uiFocus.checked && !isDegraded) {
+                let shiftAmount = severity * cat.optics.shiftStr * 40; 
+                if (cat.optics.shiftType === 'myopic') focalX -= shiftAmount;
+                else if (cat.optics.shiftType === 'hyperopic') focalX += shiftAmount;
+                else if (cat.optics.shiftType === 'variable') focalX += (Math.random() > 0.5 ? 1 : -1) * (severity * 5);
+            }
+
+            const rayYs = [120, 160, 200, 240, 280];
+            
+            rayYs.forEach(y => {
+                let lineIn = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                lineIn.setAttribute('x1', '0'); lineIn.setAttribute('y1', y);
+                lineIn.setAttribute('x2', lensX); lineIn.setAttribute('y2', y);
+                lineIn.setAttribute('class', 'ray');
+                
+                if (isDegraded && severity > 2) {
+                    lineIn.setAttribute('stroke-opacity', '0.15');
+                    rayGroup.appendChild(lineIn);
+                    return; 
+                }
+
+                rayGroup.appendChild(lineIn);
+
+                let outEndX = focalX;
+                let outEndY = lensY;
+
+                if (focalX !== retinaX) {
+                    let slope = (lensY - y) / (focalX - lensX);
+                    outEndX = (focalX < retinaX) ? retinaX : focalX;
+                    outEndY = y + slope * (outEndX - lensX);
+                }
+
+                let lineOut = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                lineOut.setAttribute('x1', lensX); lineOut.setAttribute('y1', y);
+                lineOut.setAttribute('x2', outEndX); lineOut.setAttribute('y2', outEndY);
+                lineOut.setAttribute('class', 'ray');
+                
+                if (uiScatter.checked && cat.optics.scatterStr > 0) {
+                    lineOut.setAttribute('stroke-opacity', Math.max(0.1, 1 - (severity * 0.2)));
+                }
+
+                rayGroup.appendChild(lineOut);
+            });
+
+            focalPoint.setAttribute('cx', focalX);
+            focalPoint.style.display = (isDegraded || severity === 0) ? 'none' : 'block';
+
+            if (severity === 0) {
+                focusLabel.innerText = "Focus: Normal (On Retina)";
+                focusLabel.setAttribute('fill', '#e67e22');
+            } else if (isDegraded) {
+                focusLabel.innerText = "Severe Image Degradation / No Focus";
+                focusLabel.setAttribute('fill', '#c0392b');
+            } else if (!uiFocus.checked && cat.optics.shiftType !== 'none') {
+                focusLabel.innerText = "Focus shift hidden (Toggle to view)";
+                focusLabel.setAttribute('fill', '#7f8c8d');
+            } else if (focalX < retinaX - 10) {
+                focusLabel.innerText = "Myopic Shift (Focus in front of retina)";
+                focusLabel.setAttribute('fill', '#c0392b');
+            } else if (focalX > retinaX + 10) {
+                focusLabel.innerText = "Hyperopic Shift (Focus behind retina)";
+                focusLabel.setAttribute('fill', '#8e44ad');
+            } else {
+                focusLabel.innerText = "Focus on Retina (Image degraded by scatter)";
+                focusLabel.setAttribute('fill', '#d35400');
+            }
+
+            if (uiScatter.checked && severity > 0 && cat.optics.scatterStr > 0 && !isDegraded) {
+                let numScatter = severity * Math.floor(cat.optics.scatterStr * 5);
+                rayYs.forEach(y => {
+                    if (currentType === 'psc' && (y === 120 || y === 280)) return; 
+                    if (currentType === 'cortical' && y === 200) return;
+
+                    for(let i=0; i<numScatter; i++) {
+                        let scLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        scLine.setAttribute('x1', lensX); scLine.setAttribute('y1', y);
+                        scLine.setAttribute('x2', retinaX); scLine.setAttribute('y2', y + (Math.random() - 0.5) * 300);
+                        scLine.setAttribute('class', 'scatter-ray');
+                        scLine.style.opacity = 0.4 + (Math.random() * 0.4);
+                        scatterGroup.appendChild(scLine);
+                    }
+                });
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
